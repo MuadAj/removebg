@@ -11,6 +11,10 @@ class RemoveBg extends ChangeNotifier{
 
   Dio? dio;
   Uint8List? noBgImage;
+  // Loading state to show progress bar
+  bool isLoading = false;
+  // Error state to show snackbar
+  bool isError = false;
 
   RemoveBg(){
     dio = Dio(
@@ -24,20 +28,23 @@ class RemoveBg extends ChangeNotifier{
     );
   }
 
-  Future<void> getPosts(File file) async {
-   // var response = await dio?.get("https://api.remove.bg/v1.0/removebg");
-    var r = await dio?.post("https://api.remove.bg/v1.0/removebg",
-        data: FormData.fromMap({
-          "image_file": await MultipartFile.fromFile(file.path)
-        }) );
-    NoBackgroundResponse res = NoBackgroundResponse.fromJson(r?.data) ;
-    noBgImage = base64Decode(res.data?.resultB64 ?? "");
-    // try{
-    //
-    //
-    // }catch( error){
-    //   print("error: ${error.toString()}");
-    // }
+  Future<void> removeBg(File file) async {
+    try {
+      noBgImage = null;
+      isLoading = true;
+      isError = false;
+      notifyListeners();
+      var r = await dio?.post("https://api.remove.bg/v1.0/removebg",
+          data: FormData.fromMap({
+            "image_file": await MultipartFile.fromFile(file.path)
+          }) );
+      NoBackgroundResponse res = NoBackgroundResponse.fromJson(r?.data) ;
+      noBgImage = base64Decode(res.data?.resultB64 ?? "");
+      isLoading = false;
+    }catch(error){
+      isError = true;
+      isLoading = false;
+    }
     notifyListeners();
   }
 
