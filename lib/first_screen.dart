@@ -23,17 +23,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreen extends State<HomeScreen> {
   final GlobalKey<AnimatedFloatingActionButtonState> key =
-      GlobalKey<AnimatedFloatingActionButtonState>();
+  GlobalKey<AnimatedFloatingActionButtonState>();
 
   File? image;
-  Uint8List? imageList;
+  Uint8List? currentImage;
 
   Future pickImage() async {
     try {
       final image = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (image == null) return;
       final imageTemp = File(image.path);
-      context.read<RemoveBg>().getPosts(imageTemp);
+      this.image = File(image.path);
+      context.read<RemoveBg>().removeBg(imageTemp);
       // setState(() => this.image = imageTemp);
     } on PlatformException catch (e) {
       print('Failed to pick image: $e');
@@ -42,7 +43,7 @@ class _HomeScreen extends State<HomeScreen> {
 
   Future<void> requestStoragePermission() async {
     final PermissionStatus permissionStatus =
-        await Permission.storage.request();
+    await Permission.storage.request();
     // if (permissionStatus == PermissionStatus.granted) {
     //   // do something
     // }
@@ -51,9 +52,11 @@ class _HomeScreen extends State<HomeScreen> {
   Future saveImage(Uint8List image) async {
     final PermissionStatus permissionStatus = await Permission.storage.status;
     if (permissionStatus.isGranted) {
+      print("granted");
       final result =
-          await ImageGallerySaver.saveImage(image, quality: 100, name: "image");
+      await ImageGallerySaver.saveImage(image, quality: 100, name: "image");
     } else {
+      print("not granted");
       requestStoragePermission();
     }
   }
@@ -73,7 +76,7 @@ class _HomeScreen extends State<HomeScreen> {
   Widget uploade() {
     return FloatingActionButton(
       onPressed: () {
-        saveImage(imageList!);
+        saveImage(currentImage!);
       },
       heroTag: "Inbox",
       tooltip: 'Inbox',
@@ -84,13 +87,21 @@ class _HomeScreen extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     var watcher = context.watch<RemoveBg>();
-    imageList = watcher.noBgImage;
+    currentImage = watcher.noBgImage;
     var provider = context.read<RemoveBg>();
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: Container(
+      body: (currentImage == null)
+          ? noImageContent(
+          isLoading: watcher.isLoading,
+          isError: watcher.isError,
+          context: context,
+          retry: () {
+            provider.removeBg(image!);
+          })
+          : Container(
           height: 500.0,
           width: 400.0,
           decoration: BoxDecoration(
@@ -111,6 +122,36 @@ class _HomeScreen extends State<HomeScreen> {
       ),
     );
   }
+}
+
+// the content to show if there is no current image
+Widget? noImageContent(
+    {required bool isLoading, required bool isError, required BuildContext context, required Function retry}) {
+  print("isLoading: $isLoading, isError: $isError");
+  if (!isLoading && !isError) {
+    return const Center(
+      child: Text(
+        "No image selected",
+        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+      ),
+    );
+  } else if (isLoading && !isError) {
+    return const Center(child: CircularProgressIndicator(),);
+  } else {
+    showErrorSnackbar(context, retry);
+    return null;
+  }
+}
+
+//an error snackbar to show in case there are any errors
+void showErrorSnackbar(BuildContext context, Function retry) {
+  SnackBar snackBar = SnackBar(
+    content: const Text('An error has occurred!'),
+    action: SnackBarAction(label: 'Try Again', onPressed: () => retry(),
+    ),duration: const Duration(days: 1),);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  });
 }
 
 class StartScreen extends StatelessWidget {
@@ -141,10 +182,11 @@ class StartScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 80, left: 80),
                   child: Container(
-                     child: const Text(
-                        'REMOVE BACKGROUND',style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                      )
-                  ),
+                      child: const Text(
+                        'REMOVE BACKGROUND',
+                        style: TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold),
+                      )),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(top: 200, left: 80),
@@ -193,10 +235,12 @@ class StartScreen extends StatelessWidget {
               width: 300.0,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.push(
+                  // we don't want to go back to the welcome screen so we use pushReplacement
+                  Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => HomeScreen(
+                        builder: (context) =>
+                            HomeScreen(
                               title: 'RemoveBg',
                             )),
                   );
